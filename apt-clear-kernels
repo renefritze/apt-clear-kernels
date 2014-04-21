@@ -61,6 +61,9 @@ def clear_kernels(keep):
     current_kernel = check_output(['uname', '-r'])
     versions = _versions(cache)
     to_delete = _to_delete(versions, keep, cache, current_kernel)
+    if len(to_delete) == 0:
+        print('Found no kernels to delete')
+        return
     pprint(to_delete)
     ans = raw_input('Delete packages? [y/N]: ')
     if ans == 'y':
