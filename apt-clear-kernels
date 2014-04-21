@@ -4,8 +4,10 @@ import apt
 import readline
 from subprocess import check_output
 from pprint import pprint
+import argparse
 
 HEADER_STR = 'linux-headers'
+
 
 class Version(object):
 
@@ -27,33 +29,47 @@ class Version(object):
     def __lt__(self, other):
         return self._version < other._version
 
-cache = apt.cache.Cache()
-current_kernel = check_output(['uname', '-r'])
 
-keep_max = 2
-versions = []
-
-for name in cache.keys():
-    pkg = cache[name]
-    if HEADER_STR in name and pkg.is_installed:
-        try:
-            versions.append(Version(name))
-        except (KeyError, IndexError):
-            pass
-
-versions.sort()
-
-to_delete = []
-for i in range(len(versions)-keep_max):
-    version = versions[i]
-    for pref in (HEADER_STR, 'linux-image'):
-        name = '{}-{}-generic'.format(pref, version)
-        assert current_kernel not in name
+def _versions(cache):
+    versions = []
+    for name in cache.keys():
         pkg = cache[name]
-        pkg.mark_delete()
-        to_delete.append(name)
+        if HEADER_STR in name and pkg.is_installed:
+            try:
+                versions.append(Version(name))
+            except (KeyError, IndexError):
+                pass
+    versions.sort()
+    return versions
 
-pprint(to_delete)
-ans = raw_input('Delete packages? [y/N]: ')
-if ans == 'y':
-    cache.commit()
+
+def _to_delete(versions, keep, cache, current_kernel):
+    to_delete = []
+    for i in range(len(versions)-keep):
+        version = versions[i]
+        for pref in (HEADER_STR, 'linux-image'):
+            name = '{}-{}-generic'.format(pref, version)
+            assert current_kernel not in name
+            pkg = cache[name]
+            pkg.mark_delete()
+            to_delete.append(name)
+    return to_delete
+
+
+def clear_kernels(keep):
+    cache = apt.cache.Cache()
+    current_kernel = check_output(['uname', '-r'])
+    versions = _versions(cache)
+    to_delete = _to_delete(versions, keep, cache, current_kernel)
+    pprint(to_delete)
+    ans = raw_input('Delete packages? [y/N]: ')
+    if ans == 'y':
+        cache.commit()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("keep", type=int, default=2, nargs='?',
+                    help="number of kernels to keep")
+    args = parser.parse_args()
+    clear_kernels(args.keep)
